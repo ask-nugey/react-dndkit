@@ -13,147 +13,205 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import SortableContainer from "./SortableContainer";
+import SortableContainer, { SortableContainerProps } from "./SortableContainer";
 import Item from "./Item";
 
 const Contaienr = () => {
-  // ドラッグ&ドロップでソート可能なリスト
-  const [items, setItems] = useState<{
-    [key: string]: string[];
-  }>({
-    container1: ["A", "B", "C"],
-    container2: ["D", "E", "F"],
-    container3: ["G", "H", "I"],
-    container4: [],
-  });
+  const [containers, setContainers] = useState<SortableContainerProps[]>([
+    {
+      id: "01",
+      label: "ラベルA",
+      items: [
+        { id: "01-01", content: <>テキスト</>, className: "red" },
+        { id: "01-02", content: <>テキスト</>, className: "blue" },
+        { id: "01-03", content: <>テキスト</>, className: "orange bold" },
+      ],
+    },
+    {
+      id: "02",
+      label: "ラベルB",
+      items: [
+        {
+          id: "02-01",
+          content: (
+            <>
+              テキスト
+              <br />
+              テキスト
+            </>
+          ),
+          className: "string",
+        },
+        {
+          id: "02-02",
+          content: <div className="item">テキスト</div>,
+          className: "string",
+        },
+        {
+          id: "02-03",
+          content: (
+            <ul>
+              <li>リスト</li>
+              <li>リスト</li>
+              <li>リスト</li>
+            </ul>
+          ),
+          className: "string",
+        },
+      ],
+    },
+    {
+      id: "03",
+      label: "ラベルC",
+      items: [
+        { id: "03-01", content: <>テキスト</>, className: "string" },
+        { id: "03-02", content: <>テキスト</>, className: "string" },
+        { id: "03-03", content: <>テキスト</>, className: "string" },
+      ],
+    },
+    {
+      id: "04",
+      label: "ラベルD",
+      items: [],
+    },
+  ]);
 
-  //DragOverlay用のid
-  const [activeId, setActiveId] = useState<UniqueIdentifier>();
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
-  // ドラッグの開始、移動、終了などにどのような入力を許可するかを決めるprops
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  //各コンテナ取得関数
   const findContainer = (id: UniqueIdentifier) => {
-    if (id in items) {
-      return id;
+    // コンテナIDで直接マッチする場合、そのコンテナを返す
+    let container = containers.find((container) => container.id === id);
+    if (container) {
+      return container;
     }
-    return Object.keys(items).find((key: string) =>
-      items[key].includes(id.toString())
+
+    // アイテムIDに基づいて、そのアイテムが属するコンテナを探す
+    return containers.find((container) =>
+      container.items.some((item) => item.id === id)
     );
   };
 
-  // ドラッグ開始時に発火する関数
+  const getActiveItem = () => {
+    for (let container of containers) {
+      const activeItem = container.items.find((item) => item.id === activeId);
+      if (activeItem) {
+        return activeItem;
+      }
+    }
+    return null; // アクティブなアイテムが見つからない場合
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
-    //ドラッグしたリソースのid
-    const id = active.id.toString();
-    setActiveId(id);
+    setActiveId(active.id);
   };
 
-  //ドラッグ可能なアイテムがドロップ可能なコンテナの上に移動時に発火する関数
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    //ドラッグしたリソースのid
-    const id = active.id.toString();
-    //ドロップした場所にあったリソースのid
-    const overId = over?.id;
 
-    if (!overId) return;
+    if (over) {
+      const overContainer = findContainer(over.id);
+      const activeContainer = findContainer(active.id);
 
-    // ドラッグ、ドロップ時のコンテナ取得
-    // container1,container2,container3,container4のいずれかを持つ
-    const activeContainer = findContainer(id);
-    const overContainer = findContainer(over?.id);
+      if (
+        overContainer &&
+        activeContainer &&
+        overContainer.id !== activeContainer.id
+      ) {
+        setContainers((prevContainers) => {
+          // アクティブなアイテムを移動元のコンテナから削除
+          const activeItems = activeContainer.items.filter(
+            (item) => item.id !== active.id
+          );
+          // アクティブなアイテムを移動先のコンテナに追加
+          const movingItem = activeContainer.items.find(
+            (item) => item.id === active.id
+          );
+          const overItems = movingItem
+            ? [...overContainer.items, movingItem]
+            : [...overContainer.items];
 
-    if (
-      !activeContainer ||
-      !overContainer ||
-      activeContainer === overContainer
-    ) {
-      return;
-    }
-
-    setItems((prev) => {
-      // 移動元のコンテナの要素配列を取得
-      const activeItems = prev[activeContainer];
-      // 移動先のコンテナの要素配列を取得
-      const overItems = prev[overContainer];
-
-      // 配列のインデックス取得
-      const activeIndex = activeItems.indexOf(id);
-      const overIndex = overItems.indexOf(overId.toString());
-
-      let newIndex = 0;
-      if (overId in prev) {
-        // We're at the root droppable of a container
-        newIndex = overItems.length + 1;
-      } else {
-        const isBelowLastItem = over && overIndex === overItems.length - 1;
-
-        const modifier = isBelowLastItem ? 1 : 0;
-
-        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
+          return prevContainers.map((container) => {
+            if (container.id === activeContainer.id) {
+              return { ...container, items: activeItems };
+            } else if (container.id === overContainer.id) {
+              return { ...container, items: overItems };
+            } else {
+              return container;
+            }
+          });
+        });
       }
-
-      return {
-        ...prev,
-        [activeContainer]: [
-          ...prev[activeContainer].filter((item) => item !== active.id),
-        ],
-        [overContainer]: [
-          ...prev[overContainer].slice(0, newIndex),
-          items[activeContainer][activeIndex],
-          ...prev[overContainer].slice(newIndex, prev[overContainer].length),
-        ],
-      };
-    });
+    }
   };
 
-  // ドラッグ終了時に発火する関数
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    //ドラッグしたリソースのid
-    const id = active.id.toString();
-    //ドロップした場所にあったリソースのid
-    const overId = over?.id;
-
-    if (!overId) return;
-
-    // ドラッグ、ドロップ時のコンテナ取得
-    // container1,container2,container3,container4のいずれかを持つ
-    const activeContainer = findContainer(id);
-    const overContainer = findContainer(over?.id);
-
-    if (
-      !activeContainer ||
-      !overContainer ||
-      activeContainer !== overContainer
-    ) {
+    if (!over) {
+      setActiveId(null);
       return;
     }
 
-    // 配列のインデックス取得
-    const activeIndex = items[activeContainer].indexOf(id);
-    const overIndex = items[overContainer].indexOf(overId.toString());
+    const activeId = active.id;
+    const overId = over.id;
 
-    if (activeIndex !== overIndex) {
-      setItems((items) => ({
-        ...items,
-        [overContainer]: arrayMove(
-          items[overContainer],
-          activeIndex,
-          overIndex
-        ),
-      }));
+    const activeContainer = findContainer(activeId);
+    const overContainer = findContainer(overId);
+
+    if (!activeContainer || !overContainer) {
+      setActiveId(null);
+      return;
     }
-    setActiveId(undefined);
+
+    if (activeContainer.id === overContainer.id) {
+      // 同じコンテナ内でのアイテムの並び替え
+      const newItems = arrayMove(
+        activeContainer.items,
+        activeContainer.items.findIndex((item) => item.id === activeId),
+        overContainer.items.findIndex((item) => item.id === overId)
+      );
+      setContainers((prev) =>
+        prev.map((container) => {
+          if (container.id === overContainer.id) {
+            return { ...container, items: newItems };
+          }
+          return container;
+        })
+      );
+    } else {
+      // 異なるコンテナ間でのアイテム移動
+      const movingItem = activeContainer.items.find(
+        (item) => item.id === activeId
+      );
+      if (!movingItem) {
+        setActiveId(null);
+        return;
+      }
+
+      setContainers((prev) =>
+        prev.map((container) => {
+          if (container.id === activeContainer.id) {
+            return {
+              ...container,
+              items: container.items.filter((item) => item.id !== activeId),
+            };
+          } else if (container.id === overContainer.id) {
+            return { ...container, items: [...container.items, movingItem] };
+          }
+          return container;
+        })
+      );
+    }
+
+    setActiveId(null);
   };
+
+  const activeItem = getActiveItem();
 
   return (
     <div className="contaienr">
@@ -164,29 +222,24 @@ const Contaienr = () => {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        {/* SortableContainer */}
-        <SortableContainer
-          id="container1"
-          items={items.container1}
-          label="container1"
-        />
-        <SortableContainer
-          id="container2"
-          label="container2"
-          items={items.container2}
-        />
-        <SortableContainer
-          id="container3"
-          label="container3"
-          items={items.container3}
-        />
-        <SortableContainer
-          id="container4"
-          label="container4"
-          items={items.container4}
-        />
-        {/* DragOverlay */}
-        <DragOverlay>{activeId ? <Item id={activeId} /> : null}</DragOverlay>
+        {containers.map((container) => (
+          <SortableContainer
+            key={container.id}
+            id={container.id}
+            items={container.items}
+            label={container.label}
+          />
+        ))}
+
+        <DragOverlay>
+          {activeItem ? (
+            <Item
+              id={activeId ?? 0}
+              content={activeItem.content}
+              className={activeItem.className}
+            />
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   );

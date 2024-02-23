@@ -1,6 +1,17 @@
 import { UniqueIdentifier } from "@dnd-kit/core";
+import { ReactNode } from "react";
 
-const Item = ({ id }: { id: UniqueIdentifier }) => {
-  return <div className="item">{id}</div>;
+export type ItemProps = {
+  id: UniqueIdentifier;
+  content?: ReactNode;
+  className?: string;
+};
+
+const Item = ({ id, content, className }: ItemProps) => {
+  return (
+    <div key={id} className={`item ${className ?? ""}`}>
+      {content}
+    </div>
+  );
 };
 export default Item;
